@@ -1,0 +1,16 @@
+******************************************
+
+contraseña de posgreSQL
+cuenta: admin
+usuario de systema: postgres
+servidorFarmacia947
+
+puerto 5432
+
+
+******************************************
+
+la base de datos se llama bd_archivo
+
+Usuario administrador: admin / clave: admin123
+Usuario administrativo: operador / clave: oper123
