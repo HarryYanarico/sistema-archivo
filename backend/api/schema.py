@@ -2,6 +2,7 @@ import graphene
 from graphene_django import DjangoObjectType
 from django.contrib.auth.models import User, Group
 import datetime
+import graphql_jwt
 from .models import (
     Persona, Ambiente, Estante, Piso, Carpeta, Documento,
     Incidente, DetalleIncidente, Bloqueo, Prestamo, Prorroga
@@ -126,6 +127,10 @@ class RegistrarUsuarioPersona(graphene.Mutation):
     error = graphene.String()
 
     def mutate(root, info, ci, nombre, apellido, email=None, username=None, password=None, nombre_rol=None):
+        user = info.context.user
+        if not user.is_authenticated or not user.groups.filter(name="Administrador").exists():
+            return RegistrarUsuarioPersona(success=False, error="Acceso denegado. Se requiere rol de Administrador.")
+
         if Persona.objects.filter(ci=ci).exists():
             return RegistrarUsuarioPersona(success=False, error="La persona con este CI ya existe.")
             
@@ -163,8 +168,13 @@ class CrearCarpeta(graphene.Mutation):
 
     carpeta = graphene.Field(CarpetaType)
     success = graphene.Boolean()
+    error = graphene.String()
 
     def mutate(root, info, descripcion, id_piso):
+        user = info.context.user
+        if not user.is_authenticated or not user.groups.filter(name__in=["Administrador", "Administrativo"]).exists():
+            return CrearCarpeta(success=False, error="Acceso denegado. No tienes permisos para crear carpetas.")
+
         carpeta = Carpeta.objects.create(
             descripcion=descripcion,
             piso_id=id_piso,
@@ -185,6 +195,10 @@ class RegistrarPrestamo(graphene.Mutation):
     error = graphene.String()
 
     def mutate(root, info, id_carpeta, id_persona, fecha_limite, observaciones=""):
+        user = info.context.user
+        if not user.is_authenticated or not user.groups.filter(name__in=["Administrador", "Administrativo"]).exists():
+            return RegistrarPrestamo(success=False, error="Acceso denegado. No tienes permisos para registrar préstamos.")
+
         try:
             carpeta = Carpeta.objects.get(id=id_carpeta)
         except Carpeta.DoesNotExist:
@@ -210,6 +224,10 @@ class RegistrarPrestamo(graphene.Mutation):
 
 
 class Mutation(graphene.ObjectType):
+    token_auth = graphql_jwt.ObtainJSONWebToken.Field()
+    verify_token = graphql_jwt.Verify.Field()
+    refresh_token = graphql_jwt.Refresh.Field()
+
     registrar_usuario_persona = RegistrarUsuarioPersona.Field()
     crear_carpeta = CrearCarpeta.Field()
     registrar_prestamo = RegistrarPrestamo.Field()
