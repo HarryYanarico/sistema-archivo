@@ -5,6 +5,9 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Profile from './pages/Profile';
 import UsersPage from './pages/UsersPage';
+import PersonasPage from './pages/PersonasPage';
+import UbicacionesPage from './pages/UbicacionesPage';
+import PrestamosPage from './pages/PrestamosPage';
 
 function AdminRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, loading, user } = useAuth();
@@ -90,10 +93,7 @@ export default function App() {
           path="/prestamos"
           element={
             <ProtectedRoute>
-              <div className="glass-panel rounded-2xl p-8 text-center text-surface-500">
-                <p className="text-lg font-medium">Página de Préstamos</p>
-                <p className="text-sm mt-1">Próximamente</p>
-              </div>
+              <PrestamosPage />
             </ProtectedRoute>
           }
         />
@@ -101,10 +101,7 @@ export default function App() {
           path="/ubicaciones"
           element={
             <ProtectedRoute>
-              <div className="glass-panel rounded-2xl p-8 text-center text-surface-500">
-                <p className="text-lg font-medium">Página de Ubicaciones</p>
-                <p className="text-sm mt-1">Próximamente</p>
-              </div>
+              <UbicacionesPage />
             </ProtectedRoute>
           }
         />
@@ -113,6 +110,14 @@ export default function App() {
           element={
             <AdminRoute>
               <UsersPage />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path="/personas"
+          element={
+            <AdminRoute>
+              <PersonasPage />
             </AdminRoute>
           }
         />
