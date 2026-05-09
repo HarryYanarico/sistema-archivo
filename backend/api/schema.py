@@ -3,9 +3,10 @@ from graphene_django import DjangoObjectType
 from django.contrib.auth.models import User, Group, Permission
 from django.contrib.contenttypes.models import ContentType
 import graphql_jwt
+from django.db import transaction
 from .models import (
     Persona, Ambiente, Estante, Piso, Carpeta, Documento,
-    Incidente, DetalleIncidente, Bloqueo, Prestamo, Prorroga
+    Incidente, DetalleIncidente, Bloqueo, Prestamo, PrestamoCarpeta, Prorroga
 )
 
 
@@ -94,6 +95,11 @@ class BloqueoType(DjangoObjectType):
         model = Bloqueo
         fields = "__all__"
 
+class PrestamoCarpetaType(DjangoObjectType):
+    class Meta:
+        model = PrestamoCarpeta
+        fields = "__all__"
+
 class PrestamoType(DjangoObjectType):
     class Meta:
         model = Prestamo
@@ -125,6 +131,9 @@ class Query(graphene.ObjectType):
     all_groups = graphene.List(GroupType)
     all_permissions = graphene.List(PermissionDetailType)
     all_personas = graphene.List(PersonaType)
+    all_ambientes = graphene.List(AmbienteType)
+    all_estantes = graphene.List(EstanteType)
+    all_pisos = graphene.List(PisoType)
     all_carpetas = graphene.List(CarpetaType)
     all_prestamos = graphene.List(PrestamoType)
     all_incidentes = graphene.List(IncidenteType)
@@ -160,6 +169,15 @@ class Query(graphene.ObjectType):
 
     def resolve_all_personas(root, info):
         return Persona.objects.all()
+
+    def resolve_all_ambientes(root, info):
+        return Ambiente.objects.all()
+
+    def resolve_all_estantes(root, info):
+        return Estante.objects.all()
+
+    def resolve_all_pisos(root, info):
+        return Piso.objects.all()
 
     def resolve_all_carpetas(root, info):
         return Carpeta.objects.all()
@@ -368,7 +386,7 @@ class RegistrarUsuarioPersona(graphene.Mutation):
                 usuario.groups.add(grupo)
 
         persona = Persona.objects.create(
-            ci=ci, nombre=nombre, apellido=apellido, email=email, usuario=usuario
+            ci=ci, nombre=nombre, apellido=apellido, email=email
         )
         return RegistrarUsuarioPersona(persona=persona, success=True)
 
@@ -395,38 +413,147 @@ class CrearCarpeta(graphene.Mutation):
 
 class RegistrarPrestamo(graphene.Mutation):
     class Arguments:
-        id_carpeta = graphene.ID(required=True)
+        ids_carpetas = graphene.List(graphene.ID, required=True)
         id_persona = graphene.ID(required=True)
         fecha_limite = graphene.Date(required=True)
+        id_autorizado_por = graphene.ID(required=True)
         observaciones = graphene.String()
 
     prestamo = graphene.Field(PrestamoType)
     success = graphene.Boolean()
     error = graphene.String()
 
-    def mutate(root, info, id_carpeta, id_persona, fecha_limite, observaciones=""):
+    def mutate(root, info, ids_carpetas, id_persona, fecha_limite, id_autorizado_por, observaciones=""):
         user = info.context.user
         if not user.is_authenticated:
             return RegistrarPrestamo(success=False, error="Acceso denegado.")
         if not (user.is_superuser or user.groups.filter(name__in=["Administrador", "Administrativo"]).exists() or user.has_perm('api.add_prestamo')):
             return RegistrarPrestamo(success=False, error="No tienes permisos para registrar préstamos.")
 
-        try:
-            carpeta = Carpeta.objects.get(id=id_carpeta)
-        except Carpeta.DoesNotExist:
-            return RegistrarPrestamo(success=False, error="Carpeta no encontrada")
+        carpetas = Carpeta.objects.filter(id__in=ids_carpetas)
+        if carpetas.count() != len(ids_carpetas):
+            return RegistrarPrestamo(success=False, error="Una o más carpetas no fueron encontradas")
 
-        if not carpeta.estado:
-            return RegistrarPrestamo(success=False, error="La carpeta no está disponible")
+        for carpeta in carpetas:
+            if not carpeta.estado:
+                return RegistrarPrestamo(success=False, error=f"La carpeta {carpeta.id} no está disponible")
+
+        try:
+            autorizado_por = Persona.objects.get(id=id_autorizado_por)
+        except Persona.DoesNotExist:
+            return RegistrarPrestamo(success=False, error="Persona autorizante no encontrada.")
 
         prestamo = Prestamo.objects.create(
-            carpeta_id=id_carpeta, persona_id=id_persona,
-            fecha_limite=fecha_limite, observaciones=observaciones, estado='activo'
+            persona_id=id_persona,
+            usuario=user,
+            autorizado_por=autorizado_por,
+            fecha_limite=fecha_limite, observaciones=observaciones
         )
-        carpeta.estado = False
-        carpeta.save()
+
+        for carpeta in carpetas:
+            PrestamoCarpeta.objects.create(prestamo=prestamo, carpeta=carpeta, estado='prestado')
+            carpeta.estado = False
+            carpeta.save()
 
         return RegistrarPrestamo(prestamo=prestamo, success=True)
+
+
+class CrearPersona(graphene.Mutation):
+    class Arguments:
+        ci = graphene.String(required=True)
+        nombre = graphene.String(required=True)
+        apellido = graphene.String(required=True)
+        telefono = graphene.String()
+        email = graphene.String()
+        direccion = graphene.String()
+        fecha_naci = graphene.Date()
+        cargo = graphene.String()
+
+    persona = graphene.Field(PersonaType)
+    success = graphene.Boolean()
+    error = graphene.String()
+
+    def mutate(root, info, ci, nombre, apellido, telefono=None, email=None, direccion=None, fecha_naci=None, cargo=None):
+        user = info.context.user
+        if not has_admin_permission(user):
+            return CrearPersona(success=False, error="Acceso denegado. Se requiere rol de Administrador.")
+
+        if Persona.objects.filter(ci=ci).exists():
+            return CrearPersona(success=False, error="Ya existe una persona con ese CI.")
+
+        persona = Persona.objects.create(
+            ci=ci, nombre=nombre, apellido=apellido,
+            telefono=telefono, email=email, direccion=direccion,
+            fecha_naci=fecha_naci, cargo=cargo
+        )
+        return CrearPersona(persona=persona, success=True)
+
+
+class CrearAmbiente(graphene.Mutation):
+    class Arguments:
+        nombre = graphene.String(required=True)
+        ubicacion = graphene.String()
+        descripcion = graphene.String()
+
+    ambiente = graphene.Field(AmbienteType)
+    success = graphene.Boolean()
+    error = graphene.String()
+
+    def mutate(root, info, nombre, ubicacion=None, descripcion=None):
+        if not has_admin_permission(info.context.user):
+            return CrearAmbiente(success=False, error="Acceso denegado. Se requiere rol de Administrador.")
+
+        ambiente = Ambiente.objects.create(nombre=nombre, ubicacion=ubicacion, descripcion=descripcion)
+        return CrearAmbiente(ambiente=ambiente, success=True)
+
+
+class CrearEstante(graphene.Mutation):
+    class Arguments:
+        codigo = graphene.String(required=True)
+        numero = graphene.Int()
+        descripcion = graphene.String()
+        estado = graphene.String()
+        id_ambiente = graphene.ID(required=True)
+
+    estante = graphene.Field(EstanteType)
+    success = graphene.Boolean()
+    error = graphene.String()
+
+    def mutate(root, info, codigo, id_ambiente, numero=None, descripcion=None, estado=None):
+        if not has_admin_permission(info.context.user):
+            return CrearEstante(success=False, error="Acceso denegado. Se requiere rol de Administrador.")
+
+        try:
+            ambiente = Ambiente.objects.get(id=id_ambiente)
+        except Ambiente.DoesNotExist:
+            return CrearEstante(success=False, error="Ambiente no encontrado.")
+
+        estante = Estante.objects.create(codigo=codigo, numero=numero, descripcion=descripcion, estado=estado, ambiente=ambiente)
+        return CrearEstante(estante=estante, success=True)
+
+
+class CrearPiso(graphene.Mutation):
+    class Arguments:
+        nro_fila = graphene.Int(required=True)
+        descripcion = graphene.String()
+        capacidad_max = graphene.Int()
+        id_estante = graphene.ID(required=True)
+
+    piso = graphene.Field(PisoType)
+    success = graphene.Boolean()
+    error = graphene.String()
+
+    def mutate(root, info, nro_fila, id_estante, descripcion=None, capacidad_max=None):
+        if not has_admin_permission(info.context.user):
+            return CrearPiso(success=False, error="Acceso denegado. Se requiere rol de Administrador.")
+
+        try:
+            estante = Estante.objects.get(id=id_estante)
+        except Estante.DoesNotExist:
+            return CrearPiso(success=False, error="Estante no encontrado.")
+
+        piso = Piso.objects.create(nro_fila=nro_fila, descripcion=descripcion, capacidad_max=capacidad_max, estante=estante)
+        return CrearPiso(piso=piso, success=True)
 
 
 class Mutation(graphene.ObjectType):
@@ -440,7 +567,11 @@ class Mutation(graphene.ObjectType):
     create_group = CreateGroup.Field()
 
     registrar_usuario_persona = RegistrarUsuarioPersona.Field()
+    crear_ambiente = CrearAmbiente.Field()
+    crear_estante = CrearEstante.Field()
+    crear_piso = CrearPiso.Field()
     crear_carpeta = CrearCarpeta.Field()
     registrar_prestamo = RegistrarPrestamo.Field()
+    crear_persona = CrearPersona.Field()
 
 schema = graphene.Schema(query=Query, mutation=Mutation)

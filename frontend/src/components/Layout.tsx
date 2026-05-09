@@ -30,7 +30,7 @@ export default function Layout({ children }: LayoutProps) {
     { icon: FileText, label: 'Expedientes', to: '/expedientes' },
     { icon: BookOpenCheck, label: 'Préstamos', to: '/prestamos' },
     { icon: MapPin, label: 'Ubicaciones', to: '/ubicaciones' },
-    ...(isAdmin ? [{ icon: Users, label: 'Usuarios', to: '/usuarios' }] : []),
+    ...(isAdmin ? [{ icon: Users, label: 'Usuarios', to: '/usuarios' }, { icon: UserCircle, label: 'Personas', to: '/personas' }] : []),
   ];
 
   return (

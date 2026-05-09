@@ -9,7 +9,7 @@ class Persona(models.Model):
     email = models.EmailField(max_length=100, blank=True, null=True)
     direccion = models.CharField(max_length=255, blank=True, null=True)
     fecha_naci = models.DateField(blank=True, null=True)
-    usuario = models.OneToOneField(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='persona')
+    cargo = models.CharField(max_length=100, blank=True, null=True)
 
     def __str__(self):
         return f"{self.nombre} {self.apellido}"
@@ -82,18 +82,29 @@ class Bloqueo(models.Model):
     motivo_bloq = models.CharField(max_length=255)
     fecha_desbloq = models.DateField(blank=True, null=True)
     usuario = models.ForeignKey(User, on_delete=models.CASCADE)
+    persona = models.ForeignKey(Persona, on_delete=models.CASCADE, null=True, blank=True)
 
     def __str__(self):
-        return f"Bloqueo {self.id} - {self.usuario.username}"
+        return f"Bloqueo {self.id} - {self.usuario.username} bloqueó a {self.persona}"
+
+class PrestamoCarpeta(models.Model):
+    prestamo = models.ForeignKey('Prestamo', on_delete=models.CASCADE)
+    carpeta = models.ForeignKey(Carpeta, on_delete=models.CASCADE)
+    fecha_devol = models.DateField(blank=True, null=True)
+    estado = models.CharField(max_length=20, default='prestado')
+    observaciones = models.CharField(max_length=255, blank=True, null=True)
+
+    def __str__(self):
+        return f"Prestamo {self.prestamo_id} - Carpeta {self.carpeta_id}"
 
 class Prestamo(models.Model):
     fecha_prest = models.DateField(auto_now_add=True)
-    fecha_devol = models.DateField(blank=True, null=True)
     fecha_limite = models.DateField()
-    estado = models.CharField(max_length=20)
     observaciones = models.CharField(max_length=255, blank=True, null=True)
-    persona = models.ForeignKey(Persona, on_delete=models.CASCADE)
-    carpeta = models.ForeignKey(Carpeta, on_delete=models.CASCADE)
+    persona = models.ForeignKey(Persona, on_delete=models.CASCADE, related_name='prestamos_recibidos')
+    usuario = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='prestamos_registrados')
+    autorizado_por = models.ForeignKey(Persona, on_delete=models.SET_NULL, null=True, blank=True, related_name='prestamos_autorizados')
+    carpetas = models.ManyToManyField(Carpeta, through='PrestamoCarpeta', related_name='prestamos')
 
     def __str__(self):
         return f"Prestamo {self.id} - {self.persona}"
