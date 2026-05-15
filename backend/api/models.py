@@ -119,3 +119,11 @@ class Prorroga(models.Model):
 
     def __str__(self):
         return f"Prorroga {self.id} - Prestamo {self.prestamo.id}"
+
+class Perfil(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    secreto_2fa = models.CharField(max_length=32, blank=True, null=True)
+    is_2fa_enabled = models.BooleanField(default=False)
+
+    def __str__(self):
+        return self.user.username

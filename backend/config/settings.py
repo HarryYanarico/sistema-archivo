@@ -83,7 +83,7 @@ DATABASES = {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': 'bd_archivo',
         'USER': 'postgres',
-        'PASSWORD': 'servidorFarmacia947',
+        'PASSWORD': 'comando123',
         'HOST': 'localhost',
         'PORT': '5432',
     }

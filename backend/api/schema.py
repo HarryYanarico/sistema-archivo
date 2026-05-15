@@ -1,4 +1,7 @@
 import graphene
+from .models import Perfil
+from api.services.otp_service import generate_2fa_qr
+import pyotp   #para la autenticacion 2f
 from graphene_django import DjangoObjectType
 from django.contrib.auth.models import User, Group, Permission
 from django.contrib.contenttypes.models import ContentType
@@ -555,9 +558,100 @@ class CrearPiso(graphene.Mutation):
         piso = Piso.objects.create(nro_fila=nro_fila, descripcion=descripcion, capacidad_max=capacidad_max, estante=estante)
         return CrearPiso(piso=piso, success=True)
 
+class Login2FA(graphene.Mutation):
 
+    class Arguments:
+        username = graphene.String(required=True)
+        password = graphene.String(required=True)
+
+    success = graphene.Boolean()
+    requires_2fa = graphene.Boolean()
+    setup_required = graphene.Boolean()
+    qr_code = graphene.String()
+    user_id = graphene.Int()
+    error = graphene.String()
+
+    def mutate(root, info, username, password):
+
+        from django.contrib.auth import authenticate
+
+        user = authenticate(username=username, password=password)
+
+        if user is None:
+            return Login2FA(
+                success=False,
+                error="Credenciales incorrectas"
+            )
+
+        perfil, created = Perfil.objects.get_or_create(user=user)
+
+        # 🟡 CASO 1: NO TIENE 2FA CONFIGURADO
+        if not perfil.is_2fa_enabled or not perfil.secreto_2fa:
+
+            secret, qr = generate_2fa_qr(user.username)
+
+            perfil.secreto_2fa = secret
+            perfil.is_2fa_enabled = True
+            perfil.save()
+
+            return Login2FA(
+                success=True,
+                requires_2fa=True,
+                setup_required=True,
+                qr_code=qr,
+                user_id=user.id
+            )
+
+        # 🟢 CASO 2: YA TIENE 2FA
+        return Login2FA(
+            success=True,
+            requires_2fa=True,
+            setup_required=False,
+            user_id=user.id
+        )
+class Verify2FA(graphene.Mutation):
+
+    class Arguments:
+        user_id = graphene.Int(required=True)
+        code = graphene.String(required=True)
+
+    success = graphene.Boolean()
+    token = graphene.String()
+    error = graphene.String()
+
+    def mutate(root, info, user_id, code):
+
+        from .models import Perfil
+
+        try:
+            user = User.objects.get(id=user_id)
+            perfil = Perfil.objects.get(user_id=user_id)
+
+        except:
+            return Verify2FA(
+                success=False,
+                error="Usuario no encontrado"
+            )
+
+        totp = pyotp.TOTP(perfil.secreto_2fa)
+
+        if not totp.verify(code):
+
+            return Verify2FA(
+                success=False,
+                error="Código inválido"
+            )
+
+        token = graphql_jwt.shortcuts.get_token(user)
+
+        return Verify2FA(
+            success=True,
+            token=token
+        )
+    
 class Mutation(graphene.ObjectType):
-    token_auth = graphql_jwt.ObtainJSONWebToken.Field()
+    login_2fa = Login2FA.Field()
+    verify_2fa = Verify2FA.Field()
     verify_token = graphql_jwt.Verify.Field()
     refresh_token = graphql_jwt.Refresh.Field()
 
