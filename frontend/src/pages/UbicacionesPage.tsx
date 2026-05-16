@@ -267,7 +267,7 @@ function CarpetasSection() {
         </tr></thead>
         <tbody className="divide-y divide-white/10">
           {(data?.allCarpetas ?? []).map((c: {
-            id: string; descripcion: string; estado: boolean;
+            id: string; descripcion: string; estado: string;
             piso: { nroFila: number; estante: { codigo: string; ambiente: { nombre: string } } }
           }) => (
             <tr key={c.id} className="hover:bg-white/30 transition-colors">
@@ -276,8 +276,13 @@ function CarpetasSection() {
               <td className="px-6 py-4 text-sm text-surface-600">{c.piso.estante.codigo}</td>
               <td className="px-6 py-4 text-sm text-surface-600">{c.piso.estante.ambiente.nombre}</td>
               <td className="px-6 py-4">
-                <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${c.estado ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                  {c.estado ? 'Disponible' : 'Prestado'}
+                <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
+                  c.estado === 'disponible' ? 'bg-green-100 text-green-700' :
+                  c.estado === 'traspaso' ? 'bg-amber-100 text-amber-700' :
+                  'bg-red-100 text-red-700'
+                }`}>
+                  {c.estado === 'disponible' ? 'Disponible' :
+                   c.estado === 'traspaso' ? 'En Traspaso' : 'Prestado'}
                 </span>
               </td>
             </tr>

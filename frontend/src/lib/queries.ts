@@ -328,6 +328,54 @@ export const REGISTRAR_PRESTAMO = gql`
   }
 `;
 
+export const REGISTRAR_DEVOLUCION = gql`
+  mutation RegistrarDevolucion($idPrestamoCarpeta: ID!, $observaciones: String) {
+    registrarDevolucion(idPrestamoCarpeta: $idPrestamoCarpeta, observaciones: $observaciones) {
+      devolucion {
+        id
+        fechaDevol
+        observaciones
+        usuario {
+          id
+          username
+        }
+        prestamoCarpeta {
+          id
+          carpeta {
+            id
+            descripcion
+          }
+        }
+      }
+      success
+      error
+    }
+  }
+`;
+
+export const GET_ALL_DEVOLUCIONES = gql`
+  query GetAllDevoluciones {
+    allDevoluciones {
+      id
+      fechaDevol
+      observaciones
+      usuario {
+        id
+        username
+        firstName
+        lastName
+      }
+      prestamoCarpeta {
+        id
+        carpeta {
+          id
+          descripcion
+        }
+      }
+    }
+  }
+`;
+
 export const GET_ALL_PRESTAMOS = gql`
   query GetAllPrestamos {
     allPrestamos {
@@ -373,6 +421,17 @@ export const GET_ALL_PRESTAMOS = gql`
               nombre
             }
           }
+        }
+      }
+      prestamoCarpetas {
+        id
+        estado
+        fechaDevol
+        observaciones
+        carpeta {
+          id
+          descripcion
+          estado
         }
       }
     }

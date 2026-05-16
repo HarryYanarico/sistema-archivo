@@ -9,7 +9,7 @@ import graphql_jwt
 from django.db import transaction
 from .models import (
     Persona, Ambiente, Estante, Piso, Carpeta, Documento,
-    Incidente, DetalleIncidente, Bloqueo, Prestamo, PrestamoCarpeta, Prorroga
+    Incidente, DetalleIncidente, Bloqueo, Prestamo, PrestamoCarpeta, Prorroga, Devolucion
 )
 
 
@@ -108,6 +108,16 @@ class PrestamoType(DjangoObjectType):
         model = Prestamo
         fields = "__all__"
 
+    prestamo_carpetas = graphene.List(PrestamoCarpetaType)
+
+    def resolve_prestamo_carpetas(self, info):
+        return PrestamoCarpeta.objects.filter(prestamo=self)
+
+class DevolucionType(DjangoObjectType):
+    class Meta:
+        model = Devolucion
+        fields = "__all__"
+
 class ProrrogaType(DjangoObjectType):
     class Meta:
         model = Prorroga
@@ -139,6 +149,7 @@ class Query(graphene.ObjectType):
     all_pisos = graphene.List(PisoType)
     all_carpetas = graphene.List(CarpetaType)
     all_prestamos = graphene.List(PrestamoType)
+    all_devoluciones = graphene.List(DevolucionType)
     all_incidentes = graphene.List(IncidenteType)
     persona_por_ci = graphene.Field(PersonaType, ci=graphene.String(required=True))
 
@@ -187,6 +198,9 @@ class Query(graphene.ObjectType):
 
     def resolve_all_prestamos(root, info):
         return Prestamo.objects.all()
+
+    def resolve_all_devoluciones(root, info):
+        return Devolucion.objects.all()
 
     def resolve_all_incidentes(root, info):
         return Incidente.objects.all()
@@ -410,7 +424,7 @@ class CrearCarpeta(graphene.Mutation):
         if not (user.is_superuser or user.groups.filter(name__in=["Administrador", "Administrativo"]).exists() or user.has_perm('api.add_carpeta')):
             return CrearCarpeta(success=False, error="No tienes permisos para crear carpetas.")
 
-        carpeta = Carpeta.objects.create(descripcion=descripcion, piso_id=id_piso, estado=True)
+        carpeta = Carpeta.objects.create(descripcion=descripcion, piso_id=id_piso, estado='disponible')
         return CrearCarpeta(carpeta=carpeta, success=True)
 
 
@@ -438,7 +452,7 @@ class RegistrarPrestamo(graphene.Mutation):
             return RegistrarPrestamo(success=False, error="Una o más carpetas no fueron encontradas")
 
         for carpeta in carpetas:
-            if not carpeta.estado:
+            if carpeta.estado != 'disponible':
                 return RegistrarPrestamo(success=False, error=f"La carpeta {carpeta.id} no está disponible")
 
         try:
@@ -455,10 +469,48 @@ class RegistrarPrestamo(graphene.Mutation):
 
         for carpeta in carpetas:
             PrestamoCarpeta.objects.create(prestamo=prestamo, carpeta=carpeta, estado='prestado')
-            carpeta.estado = False
+            carpeta.estado = 'prestado'
             carpeta.save()
 
         return RegistrarPrestamo(prestamo=prestamo, success=True)
+
+
+class RegistrarDevolucion(graphene.Mutation):
+    class Arguments:
+        id_prestamo_carpeta = graphene.ID(required=True)
+        observaciones = graphene.String()
+
+    devolucion = graphene.Field(DevolucionType)
+    success = graphene.Boolean()
+    error = graphene.String()
+
+    def mutate(root, info, id_prestamo_carpeta, observaciones=""):
+        user = info.context.user
+        if not user.is_authenticated:
+            return RegistrarDevolucion(success=False, error="Acceso denegado.")
+
+        try:
+            pc = PrestamoCarpeta.objects.get(id=id_prestamo_carpeta)
+        except PrestamoCarpeta.DoesNotExist:
+            return RegistrarDevolucion(success=False, error="Registro de préstamo-carpeta no encontrado.")
+
+        if Devolucion.objects.filter(prestamo_carpeta=pc).exists():
+            return RegistrarDevolucion(success=False, error="Esta carpeta ya fue devuelta.")
+
+        devolucion = Devolucion.objects.create(
+            prestamo_carpeta=pc,
+            usuario=user,
+            observaciones=observaciones
+        )
+
+        pc.estado = 'devuelto'
+        pc.save()
+
+        carpeta = pc.carpeta
+        carpeta.estado = 'disponible'
+        carpeta.save()
+
+        return RegistrarDevolucion(devolucion=devolucion, success=True)
 
 
 class CrearPersona(graphene.Mutation):
@@ -666,6 +718,7 @@ class Mutation(graphene.ObjectType):
     crear_piso = CrearPiso.Field()
     crear_carpeta = CrearCarpeta.Field()
     registrar_prestamo = RegistrarPrestamo.Field()
+    registrar_devolucion = RegistrarDevolucion.Field()
     crear_persona = CrearPersona.Field()
 
 schema = graphene.Schema(query=Query, mutation=Mutation)

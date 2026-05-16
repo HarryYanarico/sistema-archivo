@@ -44,7 +44,7 @@ class Piso(models.Model):
 class Carpeta(models.Model):
     descripcion = models.CharField(max_length=255, blank=True, null=True)
     fecha_crea = models.DateField(auto_now_add=True)
-    estado = models.BooleanField(default=True)
+    estado = models.CharField(max_length=20, default='disponible')
     piso = models.ForeignKey(Piso, on_delete=models.CASCADE)
 
     def __str__(self):
@@ -108,6 +108,15 @@ class Prestamo(models.Model):
 
     def __str__(self):
         return f"Prestamo {self.id} - {self.persona}"
+
+class Devolucion(models.Model):
+    prestamo_carpeta = models.ForeignKey(PrestamoCarpeta, on_delete=models.CASCADE)
+    usuario = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    fecha_devol = models.DateField(auto_now_add=True)
+    observaciones = models.CharField(max_length=255, blank=True, null=True)
+
+    def __str__(self):
+        return f"Devolucion {self.id} - PrestamoCarpeta {self.prestamo_carpeta_id}"
 
 class Prorroga(models.Model):
     fecha_solici = models.DateField(auto_now_add=True)
