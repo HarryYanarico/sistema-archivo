@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { useQuery, useMutation } from '@apollo/client/react';
-import { GET_ALL_PERSONAS, GET_ALL_CARPETAS, REGISTRAR_PRESTAMO, GET_ALL_PRESTAMOS, CREAR_PERSONA } from '../lib/queries';
-import { BookOpenCheck, X, Search, UserPlus, Eye } from 'lucide-react';
+import { GET_ALL_PERSONAS, GET_ALL_CARPETAS, REGISTRAR_PRESTAMO, GET_ALL_PRESTAMOS, CREAR_PERSONA, REGISTRAR_DEVOLUCION } from '../lib/queries';
+import { BookOpenCheck, X, Search, UserPlus, Eye, Undo2 } from 'lucide-react';
 
 export default function PrestamosPage() {
   const { data: prestamosData, loading: loadingPrest, refetch: refetchPrestamos } = useQuery(GET_ALL_PRESTAMOS);
   const { data: personasData } = useQuery(GET_ALL_PERSONAS);
   const { data: carpetasData } = useQuery(GET_ALL_CARPETAS);
   const [registrar] = useMutation(REGISTRAR_PRESTAMO);
+  const [devolver] = useMutation(REGISTRAR_DEVOLUCION, { refetchQueries: [{ query: GET_ALL_PRESTAMOS }] });
 
   const [showForm, setShowForm] = useState(false);
   const [step, setStep] = useState(1);
@@ -34,7 +35,7 @@ export default function PrestamosPage() {
   const [selectedPrestamo, setSelectedPrestamo] = useState<typeof prestamosData.allPrestamos[0] | null>(null);
 
   const personas = personasData?.allPersonas ?? [];
-  const carpetasDisponibles = (carpetasData?.allCarpetas ?? []).filter((c: { estado: boolean }) => c.estado);
+  const carpetasDisponibles = (carpetasData?.allCarpetas ?? []).filter((c: { estado: string }) => c.estado === 'disponible');
   const personasConCargo = personas.filter((p: { cargo?: string }) => p.cargo);
 
   const openForm = () => {
@@ -70,6 +71,15 @@ export default function PrestamosPage() {
       refetchPrestamos();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Error al registrar');
+    }
+  };
+
+  const handleDevolver = async (idPrestamoCarpeta: string) => {
+    try {
+      const { data: res } = await devolver({ variables: { idPrestamoCarpeta } });
+      if (res?.registrarDevolucion?.error) throw new Error(res.registrarDevolucion.error);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Error al registrar devolución');
     }
   };
 
@@ -203,24 +213,37 @@ export default function PrestamosPage() {
             <div className="glass-card rounded-xl p-4">
               <p className="text-xs text-surface-500 mb-3">Carpetas ({selectedPrestamo.carpetas.length})</p>
               <div className="space-y-2">
-                {selectedPrestamo.carpetas.map((c: {
-                  id: string; descripcion: string; estado: boolean;
-                  piso?: { nroFila: number; descripcion: string; estante: { codigo: string; ambiente: { nombre: string } } };
-                }) => (
-                  <div key={c.id} className="flex items-center justify-between p-3 rounded-xl bg-white/50 border border-white/40">
-                    <div>
-                      <p className="font-semibold text-surface-800 text-sm">{c.descripcion}</p>
-                      {c.piso && (
-                        <p className="text-xs text-surface-400 mt-0.5">
-                          {c.piso.estante.ambiente.nombre} / {c.piso.estante.codigo} / Fila {c.piso.nroFila}
-                        </p>
+                {selectedPrestamo.prestamoCarpetas?.map((pc: {
+                  id: string; estado: string; fechaDevol?: string;
+                  carpeta: { id: string; descripcion: string; estado: boolean; piso?: { nroFila: number; descripcion: string; estante: { codigo: string; ambiente: { nombre: string } } } };
+                }) => {
+                  const c = pc.carpeta;
+                  return (
+                    <div key={pc.id} className="flex items-center justify-between p-3 rounded-xl bg-white/50 border border-white/40">
+                      <div>
+                        <p className="font-semibold text-surface-800 text-sm">{c.descripcion}</p>
+                        {c.piso && (
+                          <p className="text-xs text-surface-400 mt-0.5">
+                            {c.piso.estante.ambiente.nombre} / {c.piso.estante.codigo} / Fila {c.piso.nroFila}
+                          </p>
+                        )}
+                      </div>
+                      {pc.estado === 'devuelto' ? (
+                        <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700">
+                          Devuelto
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => handleDevolver(pc.id)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-600 text-white text-xs font-semibold hover:bg-brand-500 transition-all shadow-sm"
+                        >
+                          <Undo2 size={14} />
+                          Devolver
+                        </button>
                       )}
                     </div>
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${c.estado ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                      {c.estado ? 'Disponible' : 'Prestado'}
-                    </span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>
