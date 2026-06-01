@@ -60,6 +60,7 @@ CREATE TABLE api_estante (
     numero INT,
     descripcion VARCHAR(255),
     estado VARCHAR(20),
+    limite_pisos INT,
     ambiente_id INT NOT NULL,
     CONSTRAINT fk_estante_ambiente FOREIGN KEY (ambiente_id) REFERENCES api_ambiente(id) ON DELETE CASCADE
 );
@@ -68,7 +69,6 @@ CREATE TABLE api_piso (
     id INT PRIMARY KEY,
     nro_fila INT NOT NULL,
     descripcion VARCHAR(255),
-    capacidad_max INT,
     estante_id INT NOT NULL,
     CONSTRAINT fk_piso_estante FOREIGN KEY (estante_id) REFERENCES api_estante(id) ON DELETE CASCADE
 );

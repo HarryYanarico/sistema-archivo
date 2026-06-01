@@ -11,7 +11,7 @@ class EmailAuthBackend(ModelBackend):
         # 'username' param will contain the email address provided by the user
         try:
             user = User.objects.get(email=username)
-            if user.check_password(password):
+            if user.check_password(password) and self.user_can_authenticate(user):
                 return user
         except User.DoesNotExist:
             return None
