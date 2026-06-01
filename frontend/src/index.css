@@ -5,17 +5,50 @@
 @tailwind utilities;
 
 @layer base {
+  html, body {
+    @apply overflow-hidden h-full;
+  }
+
   body {
-    @apply bg-surface-50 text-surface-900 font-sans antialiased;
+    @apply bg-surface-50 text-surface-800 font-sans antialiased;
+  }
+
+  .dark body,
+  body.dark {
+    @apply bg-sepia-950 text-sepia-200;
   }
 }
 
 @layer components {
   .glass-panel {
-    @apply bg-white/70 backdrop-blur-md border border-white/20 shadow-xl;
+    @apply bg-white/80 backdrop-blur-md border border-white/30 shadow-xl;
+  }
+
+  .dark .glass-panel {
+    @apply bg-sepia-900/80 backdrop-blur-md border border-sepia-700/40 shadow-2xl;
   }
 
   .glass-card {
-    @apply bg-white/60 backdrop-blur-sm border border-white/40 shadow-lg hover:shadow-xl transition-all duration-300;
+    @apply bg-white/70 backdrop-blur-sm border border-white/40 shadow-lg hover:shadow-xl transition-all duration-300;
+  }
+
+  .dark .glass-card {
+    @apply bg-sepia-800/70 backdrop-blur-sm border border-sepia-700/30 shadow-lg hover:shadow-xl;
+  }
+
+  .dark .glass-panel table thead {
+    @apply bg-sepia-900/90;
+  }
+
+  .dark .glass-panel table tbody tr:hover {
+    @apply bg-sepia-800/40;
+  }
+
+  .dark input, .dark select, .dark textarea {
+    @apply bg-sepia-800/60 border-sepia-700/40 text-sepia-200;
+  }
+
+  .dark input::placeholder, .dark textarea::placeholder {
+    @apply text-sepia-500;
   }
 }

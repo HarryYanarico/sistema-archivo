@@ -1,7 +1,18 @@
+import time
 import pyotp
 import qrcode
 import base64
 from io import BytesIO
+
+
+def obtener_tiempo_ntp():
+    try:
+        import ntplib
+        client = ntplib.NTPClient()
+        response = client.request('pool.ntp.org', timeout=3)
+        return response.tx_time
+    except Exception:
+        return time.time()
 
 
 def generate_2fa_qr(username):

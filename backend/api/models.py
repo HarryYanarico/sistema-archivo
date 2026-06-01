@@ -1,5 +1,7 @@
+import secrets
 from django.db import models
 from django.contrib.auth.models import User
+from django.utils import timezone
 
 class Persona(models.Model):
     ci = models.CharField(max_length=20, unique=True)
@@ -27,6 +29,7 @@ class Estante(models.Model):
     numero = models.IntegerField(blank=True, null=True)
     descripcion = models.CharField(max_length=255, blank=True, null=True)
     estado = models.CharField(max_length=20, blank=True, null=True)
+    limite_pisos = models.IntegerField(blank=True, null=True, default=1)
     ambiente = models.ForeignKey(Ambiente, on_delete=models.CASCADE)
 
     def __str__(self):
@@ -35,7 +38,6 @@ class Estante(models.Model):
 class Piso(models.Model):
     nro_fila = models.IntegerField()
     descripcion = models.CharField(max_length=255, blank=True, null=True)
-    capacidad_max = models.IntegerField(blank=True, null=True)
     estante = models.ForeignKey(Estante, on_delete=models.CASCADE)
 
     def __str__(self):
@@ -55,6 +57,7 @@ class Documento(models.Model):
     titulo = models.CharField(max_length=150)
     tipo_doc = models.CharField(max_length=50)
     fecha_ingre = models.DateField(auto_now_add=True)
+    propietario = models.CharField(max_length=200, blank=True, null=True)
     carpeta = models.ForeignKey(Carpeta, on_delete=models.CASCADE)
 
     def __str__(self):
@@ -114,17 +117,18 @@ class Devolucion(models.Model):
     usuario = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
     fecha_devol = models.DateField(auto_now_add=True)
     observaciones = models.CharField(max_length=255, blank=True, null=True)
+    estado_devolucion = models.CharField(max_length=20, default='buen_estado')
 
     def __str__(self):
         return f"Devolucion {self.id} - PrestamoCarpeta {self.prestamo_carpeta_id}"
 
 class Prorroga(models.Model):
-    fecha_solici = models.DateField(auto_now_add=True)
-    dias_solicit = models.IntegerField()
-    estado = models.CharField(max_length=20)
-    fecha_aprobado = models.DateField(blank=True, null=True)
-    motivo = models.CharField(max_length=255, blank=True, null=True)
     prestamo = models.ForeignKey(Prestamo, on_delete=models.CASCADE)
+    persona_solicita = models.ForeignKey(Persona, on_delete=models.SET_NULL, null=True, blank=True)
+    usuario = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    fecha_registro = models.DateField(auto_now_add=True)
+    dias_otorgados = models.IntegerField()
+    motivo = models.CharField(max_length=255, blank=True, null=True)
 
     def __str__(self):
         return f"Prorroga {self.id} - Prestamo {self.prestamo.id}"
@@ -133,6 +137,88 @@ class Perfil(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     secreto_2fa = models.CharField(max_length=32, blank=True, null=True)
     is_2fa_enabled = models.BooleanField(default=False)
+    session_invalidated_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        permissions = [
+            ('gestionar_carpetas', 'Gestionar Carpetas'),
+            ('gestionar_documentos', 'Gestionar Documentos'),
+            ('gestionar_prestamos', 'Gestionar Préstamos'),
+            ('gestionar_devoluciones', 'Gestionar Devoluciones'),
+            ('gestionar_traspasos', 'Gestionar Traspasos'),
+            ('gestionar_ubicaciones', 'Gestionar Ubicaciones'),
+            ('gestionar_personas', 'Gestionar Personas'),
+            ('gestionar_bloqueos', 'Gestionar Bloqueos'),
+            ('gestionar_prorrogas', 'Gestionar Prórrogas'),
+            ('gestionar_usuarios', 'Gestionar Usuarios'),
+            ('ver_dashboard', 'Ver Dashboard y Reportes'),
+        ]
 
     def __str__(self):
         return self.user.username
+
+
+class TempToken(models.Model):
+    PURPOSES = [
+        ('2fa', '2FA Verification'),
+        ('reset', 'Password Reset'),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    token = models.CharField(max_length=64, unique=True)
+    purpose = models.CharField(max_length=10, choices=PURPOSES, default='2fa')
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+
+    def is_expired(self):
+        return timezone.now() >= self.expires_at
+
+    @classmethod
+    def create_token(cls, user, expiry_minutes=1):
+        cls.objects.filter(user=user, purpose='2fa', expires_at__gt=timezone.now()).delete()
+        token_str = secrets.token_urlsafe(48)
+        expires_at = timezone.now() + timezone.timedelta(minutes=expiry_minutes)
+        return cls.objects.create(user=user, token=token_str, purpose='2fa', expires_at=expires_at)
+
+    @classmethod
+    def create_reset_token(cls, user, expiry_minutes=15):
+        cls.objects.filter(user=user, purpose='reset').delete()
+        token_str = secrets.token_urlsafe(48)
+        expires_at = timezone.now() + timezone.timedelta(minutes=expiry_minutes)
+        return cls.objects.create(user=user, token=token_str, purpose='reset', expires_at=expires_at)
+
+    def __str__(self):
+        return f"TempToken({self.purpose}) {self.user.username} — {self.created_at}"
+
+
+class AsignacionAmbiente(models.Model):
+    usuario = models.ForeignKey(User, on_delete=models.CASCADE, related_name='ambientes_asignados')
+    ambiente = models.ForeignKey(Ambiente, on_delete=models.CASCADE, related_name='usuarios_asignados')
+
+    class Meta:
+        unique_together = ('usuario', 'ambiente')
+
+    def __str__(self):
+        return f"{self.usuario.username} → {self.ambiente.nombre}"
+
+
+class Traspaso(models.Model):
+    usuario = models.ForeignKey(User, on_delete=models.PROTECT)
+    ambiente_origen = models.ForeignKey(Ambiente, on_delete=models.PROTECT, related_name='traspasos_origen')
+    ambiente_destino = models.ForeignKey(Ambiente, on_delete=models.PROTECT, related_name='traspasos_destino')
+    fecha = models.DateTimeField(auto_now_add=True)
+    observaciones = models.TextField(blank=True, null=True)
+    ubicado = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"Traspaso {self.id} — {self.ambiente_origen.nombre} → {self.ambiente_destino.nombre}"
+
+
+class TraspasoCarpeta(models.Model):
+    traspaso = models.ForeignKey(Traspaso, on_delete=models.CASCADE, related_name='items')
+    carpeta = models.ForeignKey(Carpeta, on_delete=models.PROTECT)
+    piso_asignado = models.ForeignKey(Piso, on_delete=models.SET_NULL, null=True, blank=True)
+    ubicado = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"Traspaso {self.traspaso_id} — Carpeta {self.carpeta_id}"

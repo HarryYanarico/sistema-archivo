@@ -1,93 +1,359 @@
-import { FileText, BookOpenCheck, Users, TrendingUp, FolderSearch } from 'lucide-react';
+import { useQuery } from '@apollo/client/react';
+import {
+  FileText, BookOpenCheck, Users, FolderSearch,
+  AlertTriangle, Clock, ArrowLeftRight, RotateCcw, CheckCircle2,
+} from 'lucide-react';
+import { GET_DASHBOARD_STATS } from '../lib/queries';
+
+interface DashboardStats {
+  totalCarpetas: number;
+  prestamosActivos: number;
+  prestamosVencidosCount: number;
+  carpetasDisponibles: number;
+  personasCount: number;
+  traspasosPendientes: number;
+  incidentesActivos: number;
+  carpetasPorAmbiente: { ambienteId: string; ambienteNombre: string; count: number }[];
+  prestamosRecientes: {
+    id: string;
+    fechaPrest: string;
+    fechaLimite: string;
+    persona: { nombre: string; apellido: string };
+    carpetas: { descripcion: string }[];
+  }[];
+  prestamosPorVencer: {
+    id: string;
+    fechaLimite: string;
+    persona: { nombre: string; apellido: string };
+    carpetas: { descripcion: string }[];
+  }[];
+  devolucionesRecientes: {
+    id: string;
+    fechaDevol: string;
+    usuario: { firstName: string; lastName: string };
+    prestamoCarpeta: { carpeta: { descripcion: string } };
+  }[];
+}
+
+interface DashboardData {
+  dashboardStats: DashboardStats;
+}
+
+function formatDate(dateStr: string) {
+  return new Date(dateStr).toLocaleDateString('es-ES', {
+    day: '2-digit', month: 'short', year: 'numeric'
+  });
+}
+
+function daysUntil(dateStr: string) {
+  const diff = new Date(dateStr).getTime() - Date.now();
+  return Math.ceil(diff / (1000 * 60 * 60 * 24));
+}
 
 export default function Dashboard() {
+  const { loading, error, data } = useQuery<DashboardData>(GET_DASHBOARD_STATS);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-600" />
+      </div>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <div className="glass-panel rounded-2xl p-8 text-center text-surface-600 dark:text-sepia-500">
+        {error ? `Error al cargar estadísticas: ${error.message}` : 'No hay datos disponibles'}
+      </div>
+    );
+  }
+
+  const s = data.dashboardStats;
+
   return (
     <>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
         <StatCard
-          title="Total Expedientes"
-          value="12,458"
-          trend="+125 esta semana"
-          icon={<FileText className="text-brand-600" size={24} />}
-          color="bg-brand-100"
+          title="Total Carpetas"
+          value={s.totalCarpetas.toLocaleString()}
+          icon={<FileText className="text-brand-600 dark:text-brand-dark-400" size={20} />}
+          color="bg-brand-100 dark:bg-brand-dark-600/20"
         />
         <StatCard
           title="Préstamos Activos"
-          value="342"
-          trend="-12 esta semana"
-          icon={<BookOpenCheck className="text-amber-600" size={24} />}
-          color="bg-amber-100"
+          value={s.prestamosActivos.toLocaleString()}
+          icon={<BookOpenCheck className="text-amber-600 dark:text-amber-400" size={20} />}
+          color="bg-amber-100 dark:bg-amber-900/40"
         />
         <StatCard
-          title="Usuarios Registrados"
-          value="89"
-          trend="+15% vs mes anterior"
-          icon={<Users className="text-indigo-600" size={24} />}
-          color="bg-indigo-100"
+          title="Vencidos"
+          value={s.prestamosVencidosCount.toLocaleString()}
+          icon={<AlertTriangle className="text-red-600 dark:text-red-400" size={20} />}
+          color="bg-red-100 dark:bg-red-900/40"
+        />
+        <StatCard
+          title="Disponibles"
+          value={s.carpetasDisponibles.toLocaleString()}
+          icon={<CheckCircle2 className="text-green-600 dark:text-green-400" size={20} />}
+          color="bg-green-100 dark:bg-green-900/40"
+        />
+        <StatCard
+          title="Personas"
+          value={s.personasCount.toLocaleString()}
+          icon={<Users className="text-indigo-600 dark:text-indigo-400" size={20} />}
+          color="bg-indigo-100 dark:bg-indigo-900/40"
+        />
+        <StatCard
+          title="Traspasos Pend."
+          value={s.traspasosPendientes.toLocaleString()}
+          icon={<ArrowLeftRight className="text-purple-600 dark:text-purple-400" size={20} />}
+          color="bg-purple-100 dark:bg-purple-900/40"
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1">
-        <div className="lg:col-span-2 glass-panel rounded-2xl p-6 flex flex-col">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="text-lg font-bold text-surface-800">Préstamos Recientes</h3>
-            <button className="text-sm text-brand-600 font-medium hover:text-brand-700 transition-colors">Ver todos</button>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+        <div className="lg:col-span-2 glass-panel rounded-2xl p-6">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-bold text-surface-800 dark:text-sepia-200 flex items-center gap-2">
+              <Clock size={18} className="text-amber-500 dark:text-amber-400" />
+              Préstamos por Vencer
+            </h3>
           </div>
-
-          <div className="space-y-4 overflow-y-auto pr-2">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="glass-card rounded-xl p-4 flex items-center justify-between group cursor-pointer hover:border-brand-200 hover:bg-white/80">
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-lg bg-surface-100 flex items-center justify-center text-surface-500 group-hover:bg-brand-50 group-hover:text-brand-600 transition-colors">
-                    <FolderSearch size={20} />
+          {s.prestamosPorVencer.length === 0 ? (
+            <p className="text-surface-500 dark:text-sepia-500 text-sm py-4 text-center">No hay préstamos próximos a vencer</p>
+          ) : (
+            <div className="space-y-3 max-h-80 overflow-y-auto pr-2">
+              {s.prestamosPorVencer.map((p) => {
+                const d = daysUntil(p.fechaLimite);
+                const isUrgent = d <= 2;
+                return (
+                  <div key={p.id} className={`glass-card rounded-xl p-4 flex items-center justify-between ${isUrgent ? 'border-red-200 dark:border-red-800 bg-red-50/30 dark:bg-red-900/20' : ''}`}>
+                    <div>
+                      <p className="font-semibold text-sm text-surface-800 dark:text-sepia-200">{p.persona.nombre} {p.persona.apellido}</p>
+                      <p className="text-xs text-surface-600 dark:text-sepia-500">{p.carpetas.map(c => c.descripcion).join(', ') || 'Sin descripción'}</p>
+                    </div>
+                    <div className="text-right">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        isUrgent ? 'bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-300' : 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300'
+                      }`}>
+                        {d <= 0 ? 'Vencido' : `${d} días`}
+                      </span>
+                      <p className="text-xs text-surface-500 dark:text-sepia-500 mt-1">Vence: {formatDate(p.fechaLimite)}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-semibold text-surface-800 text-sm">EXP-{2024000 + i}</p>
-                    <p className="text-xs text-surface-500">Juan Pérez - Ingeniería Civil</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
-                    En Préstamo
-                  </span>
-                  <p className="text-xs text-surface-400 mt-1">Vence: 12 May 2026</p>
-                </div>
-              </div>
-            ))}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
-        <div className="glass-panel rounded-2xl p-6 flex flex-col gap-4">
-          <h3 className="text-lg font-bold text-surface-800 mb-2">Acciones Rápidas</h3>
-
-          <button className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-brand-600 to-brand-500 text-white font-medium shadow-md shadow-brand-500/30 hover:shadow-lg hover:shadow-brand-500/40 hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2">
-            <BookOpenCheck size={18} />
-            Registrar Préstamo
-          </button>
-
-          <button className="w-full py-3 px-4 rounded-xl bg-white/60 border border-white/80 text-surface-700 font-medium shadow-sm hover:bg-white transition-all flex items-center justify-center gap-2">
-            <FileText size={18} />
-            Nuevo Expediente
-          </button>
-
-          <button className="w-full py-3 px-4 rounded-xl bg-white/60 border border-white/80 text-surface-700 font-medium shadow-sm hover:bg-white transition-all flex items-center justify-center gap-2">
-            <Users size={18} />
-            Agregar Usuario
-          </button>
-
-          <div className="mt-auto pt-6 border-t border-white/30">
-            <div className="glass-card rounded-xl p-4 bg-brand-50/50 border-brand-100">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="p-2 rounded-lg bg-brand-100 text-brand-600">
-                  <TrendingUp size={16} />
+        <div className="glass-panel rounded-2xl p-6">
+          <h3 className="text-lg font-bold text-surface-800 dark:text-sepia-200 flex items-center gap-2 mb-4">
+            <AlertTriangle size={18} className="text-red-500 dark:text-red-400" />
+            Alertas
+          </h3>
+          <div className="space-y-3">
+            <div className="glass-card rounded-xl p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400">
+                  <AlertTriangle size={16} />
                 </div>
-                <h4 className="font-semibold text-sm text-surface-800">Capacidad</h4>
-              </div>
-              <p className="text-xs text-surface-500 mb-2">Estante A (85% lleno)</p>
-              <div className="w-full bg-surface-200 rounded-full h-1.5">
-                <div className="bg-brand-500 h-1.5 rounded-full" style={{ width: '85%' }}></div>
+                <div>
+                  <p className="font-semibold text-sm text-surface-800 dark:text-sepia-200">{s.prestamosVencidosCount} Vencidos</p>
+                  <p className="text-xs text-surface-600 dark:text-sepia-500">Préstamos que excedieron la fecha límite</p>
+                </div>
               </div>
             </div>
+            <div className="glass-card rounded-xl p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400">
+                  <ArrowLeftRight size={16} />
+                </div>
+                <div>
+                  <p className="font-semibold text-sm text-surface-800 dark:text-sepia-200">{s.traspasosPendientes} Traspasos Pend.</p>
+                  <p className="text-xs text-surface-600 dark:text-sepia-500">Carpetas en tránsito por ubicar</p>
+                </div>
+              </div>
+            </div>
+            <div className="glass-card rounded-xl p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-orange-100 text-orange-600 dark:bg-orange-900/40 dark:text-orange-300">
+                  <FolderSearch size={16} />
+                </div>
+                <div>
+                  <p className="font-semibold text-sm text-surface-800 dark:text-sepia-200">{s.incidentesActivos} Incidentes Activos</p>
+                  <p className="text-xs text-surface-600 dark:text-sepia-500">Reportes de incidentes sin resolver</p>
+                </div>
+              </div>
+            </div>
+            <div className="glass-card rounded-xl p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-green-100 dark:bg-green-900/40 text-green-600 dark:text-green-400">
+                  <CheckCircle2 size={16} />
+                </div>
+                <div>
+                  <p className="font-semibold text-sm text-surface-800 dark:text-sepia-200">{s.carpetasDisponibles} Disponibles</p>
+                  <p className="text-xs text-surface-600 dark:text-sepia-500">Carpetas listas para préstamo</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <div className="glass-panel rounded-2xl p-6">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-bold text-surface-800 dark:text-sepia-200 flex items-center gap-2">
+              <BookOpenCheck size={18} className="text-brand-600 dark:text-brand-dark-400" />
+              Préstamos Recientes
+            </h3>
+          </div>
+          {s.prestamosRecientes.length === 0 ? (
+            <p className="text-surface-500 dark:text-sepia-500 text-sm py-4 text-center">No hay préstamos registrados</p>
+          ) : (
+            <div className="space-y-3 max-h-80 overflow-y-auto pr-2">
+              {s.prestamosRecientes.map((p) => (
+                <div key={p.id} className="glass-card rounded-xl p-4 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-surface-100 flex items-center justify-center text-surface-600 dark:text-sepia-500">
+                      <FolderSearch size={18} />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-sm text-surface-800 dark:text-sepia-200">{p.persona.nombre} {p.persona.apellido}</p>
+                      <p className="text-xs text-surface-600 dark:text-sepia-500">{p.carpetas.map(c => c.descripcion).join(', ') || 'Sin descripción'}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300">
+                      En Préstamo
+                    </span>
+                    <p className="text-xs text-surface-500 dark:text-sepia-500 mt-1">{formatDate(p.fechaPrest)}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="glass-panel rounded-2xl p-6">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-bold text-surface-800 dark:text-sepia-200 flex items-center gap-2">
+              <RotateCcw size={18} className="text-green-600 dark:text-green-400" />
+              Devoluciones Recientes
+            </h3>
+          </div>
+          {s.devolucionesRecientes.length === 0 ? (
+            <p className="text-surface-500 dark:text-sepia-500 text-sm py-4 text-center">No hay devoluciones registradas</p>
+          ) : (
+            <div className="space-y-3 max-h-80 overflow-y-auto pr-2">
+              {s.devolucionesRecientes.map((d) => (
+                <div key={d.id} className="glass-card rounded-xl p-4 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-green-100 dark:bg-green-900/40 flex items-center justify-center text-green-600 dark:text-green-400">
+                      <RotateCcw size={18} />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-sm text-surface-800 dark:text-sepia-200">{d.prestamoCarpeta.carpeta.descripcion}</p>
+                      <p className="text-xs text-surface-600 dark:text-sepia-500">por {d.usuario ? `${d.usuario.firstName} ${d.usuario.lastName}` : '—'}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300">
+                      Devuelto
+                    </span>
+                    <p className="text-xs text-surface-500 dark:text-sepia-500 mt-1">{formatDate(d.fechaDevol)}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="glass-panel rounded-2xl p-6">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-bold text-surface-800 dark:text-sepia-200">Carpetas por Ambiente</h3>
+          </div>
+          {s.carpetasPorAmbiente.length === 0 ? (
+            <p className="text-surface-500 dark:text-sepia-500 text-sm py-4 text-center">No hay datos de ambientes</p>
+          ) : (
+            <div className="space-y-3">
+              {s.carpetasPorAmbiente.map((a) => {
+                const maxCount = Math.max(...s.carpetasPorAmbiente.map(x => x.count));
+                const pct = (a.count / maxCount) * 100;
+                return (
+                  <div key={a.ambienteId}>
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="font-medium text-surface-700 dark:text-sepia-300">{a.ambienteNombre}</span>
+                      <span className="text-surface-600 dark:text-sepia-500">{a.count}</span>
+                    </div>
+                    <div className="w-full bg-surface-200 dark:bg-sepia-700 rounded-full h-2.5">
+                      <div
+                        className="bg-gradient-to-r from-brand-500 to-brand-400 dark:from-brand-dark-500 dark:to-brand-dark-400 h-2.5 rounded-full transition-all duration-500"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="glass-panel rounded-2xl p-6">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-bold text-surface-800 dark:text-sepia-200">Estado General</h3>
+          </div>
+          <div className="grid grid-cols-2 gap-4 h-full">
+            <EstadoItem
+              label="Disponibles"
+              value={s.carpetasDisponibles}
+              total={s.totalCarpetas}
+              color="bg-green-500"
+              bgColor="bg-green-100 dark:bg-green-900/40"
+            />
+            <EstadoItem
+              label="En Préstamo"
+              value={s.prestamosActivos}
+              total={s.totalCarpetas}
+              color="bg-amber-500"
+              bgColor="bg-amber-100 dark:bg-amber-900/40"
+            />
+            {s.totalCarpetas > 0 && (
+              <div className="col-span-2 mt-2">
+                <div className="w-full bg-surface-200 dark:bg-sepia-700 rounded-full h-4 overflow-hidden flex">
+                  {s.carpetasDisponibles > 0 && (
+                    <div
+                      className="bg-green-500 h-full transition-all duration-500"
+                      style={{ width: `${(s.carpetasDisponibles / s.totalCarpetas) * 100}%` }}
+                      title={`Disponibles: ${s.carpetasDisponibles}`}
+                    />
+                  )}
+                  {s.prestamosActivos > 0 && (
+                    <div
+                      className="bg-amber-500 h-full transition-all duration-500"
+                      style={{ width: `${(s.prestamosActivos / s.totalCarpetas) * 100}%` }}
+                      title={`En préstamo: ${s.prestamosActivos}`}
+                    />
+                  )}
+                  {(s.totalCarpetas - s.carpetasDisponibles - s.prestamosActivos) > 0 && (
+                    <div
+                      className="bg-surface-400 dark:bg-sepia-600 h-full transition-all duration-500"
+                      style={{ width: `${((s.totalCarpetas - s.carpetasDisponibles - s.prestamosActivos) / s.totalCarpetas) * 100}%` }}
+                      title={`Otros: ${s.totalCarpetas - s.carpetasDisponibles - s.prestamosActivos}`}
+                    />
+                  )}
+                </div>
+                <div className="flex justify-between text-xs text-surface-600 dark:text-sepia-500 mt-2">
+                  <span><span className="inline-block w-2 h-2 rounded-full bg-green-500 mr-1" /> Disponibles ({s.carpetasDisponibles})</span>
+                  <span><span className="inline-block w-2 h-2 rounded-full bg-amber-500 mr-1" /> En préstamo ({s.prestamosActivos})</span>
+                  <span><span className="inline-block w-2 h-2 rounded-full bg-surface-400 dark:bg-sepia-600 mr-1" /> Otros ({s.totalCarpetas - s.carpetasDisponibles - s.prestamosActivos})</span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -95,19 +361,30 @@ export default function Dashboard() {
   );
 }
 
-function StatCard({ title, value, trend, icon, color }: { title: string; value: string; trend: string; icon: React.ReactNode; color: string }) {
+function StatCard({ title, value, icon, color }: { title: string; value: string; icon: React.ReactNode; color: string }) {
   return (
-    <div className="glass-panel rounded-2xl p-6 relative overflow-hidden group">
-      <div className={`absolute -right-4 -top-4 w-24 h-24 rounded-full ${color} opacity-50 group-hover:scale-150 transition-transform duration-500 ease-out`} />
+    <div className="glass-panel rounded-2xl p-4 relative overflow-hidden group">
+      <div className={`absolute -right-4 -top-4 w-20 h-20 rounded-full ${color} opacity-50 group-hover:scale-150 transition-transform duration-500 ease-out`} />
       <div className="relative z-10">
-        <div className="flex justify-between items-start mb-4">
-          <div className={`p-3 rounded-xl ${color} shadow-sm`}>
-            {icon}
-          </div>
+        <div className={`p-2.5 rounded-xl ${color} shadow-sm inline-flex mb-3`}>
+          {icon}
         </div>
-        <h3 className="text-surface-500 text-sm font-medium mb-1">{title}</h3>
-        <p className="text-3xl font-bold text-surface-800 mb-2">{value}</p>
-        <p className="text-xs font-medium text-surface-500">{trend}</p>
+        <h3 className="text-surface-600 dark:text-sepia-500 text-xs font-medium mb-0.5">{title}</h3>
+        <p className="text-2xl font-bold text-surface-800 dark:text-sepia-200">{value}</p>
+      </div>
+    </div>
+  );
+}
+
+function EstadoItem({ label, value, total, color, bgColor }: { label: string; value: number; total: number; color: string; bgColor: string }) {
+  const pct = total > 0 ? Math.round((value / total) * 100) : 0;
+  return (
+    <div className={`glass-card rounded-xl p-4 ${bgColor}`}>
+      <p className="text-sm font-semibold text-surface-700 dark:text-sepia-300">{label}</p>
+      <p className="text-2xl font-bold text-surface-800 dark:text-sepia-200">{value}</p>
+      <p className="text-xs text-surface-600 dark:text-sepia-500">{pct}% del total</p>
+      <div className="w-full bg-surface-200 dark:bg-sepia-700 rounded-full h-2 mt-2">
+        <div className={`${color} h-2 rounded-full`} style={{ width: `${pct}%` }} />
       </div>
     </div>
   );
